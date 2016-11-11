@@ -7,6 +7,12 @@ __pycache__/
 bin/
 include/
 
+# nosetests
+man/
+
+# pip
+pip-selfcheck.json
+
 # C extensions
 *.so
 
