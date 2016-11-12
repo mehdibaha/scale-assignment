@@ -13,6 +13,9 @@ man/
 # pip
 pip-selfcheck.json
 
+# Max stuff
+.DS_Store
+
 # C extensions
 *.so
 
