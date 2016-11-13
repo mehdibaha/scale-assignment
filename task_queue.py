@@ -1,4 +1,5 @@
 # Pymongo
+import pymongo
 from pymongo import MongoClient
 from pymongo.collection import ReturnDocument
 
@@ -41,10 +42,10 @@ class TaskQueue(object):
         if urgency not in ["immediate", "day", "week"]:
             raise ValueError("Urgency parameter not \"immediate\" or \"day\" or \"week\"")
         # Creating document in mongodb, then retrieving to convert it as a object
-        new_id = self.tasks.insert_one({"urgency": urgency, "created_at": datetime.utcnow(), "status": "pending"}).inserted_id
+        urgency = self.to_int(urgency)
+        new_id = self.tasks.insert_one({"urgency": urgency, "created_at": datetime.utcnow(), "status": "pending", "completed_at": None, "scaler_id": None}).inserted_id
         task = self.tasks.find_one({"_id": new_id})
-        task = Task(task_id=task["_id"], created_at=task["created_at"], status=task["status"], urgency=task["urgency"])
-        return task
+        return self.to_obj(task)
 
     def complete_task(self, task_id):
         """
@@ -83,25 +84,32 @@ class TaskQueue(object):
         :raises ValueError: if the batch_size is inferior or equal to 0
         :raises ScalerNotFound: if the scaler with given id does not exist
         """
-        if type(task_id) is not ObjectId:
-            raise TypeError("Task_id parameter should be an ObjectId")
+        if type(scaler_id) is not ObjectId:
+            raise TypeError("Scaler_id parameter should be an ObjectId")
         if type(batch_size) is not int:
             raise TypeError("Bach_size parameter should be an int")
         if batch_size <= 0:
-            raise TypeError("Batch_size parameter should be strictly superior to 0")
-        #mongo.get(scaler_id)
-        #catch exception mongodb, then
-        raise ScalerNotFound("Scaler not found in db")
-        #do magic
-        tasks_list = []
-        return tasks_list
+            raise ValueError("Batch_size parameter should be strictly superior to 0")
+        scaler = self.scalers.find_one({'_id': scaler_id})
+        if scaler:
+            # Looking for unassigned tasks ids by priority and batch_size
+            tasks = self.tasks.find({"status": "pending", "scaler_id": None}).sort([("urgency", -1)]).limit(batch_size)
+            ids = [task['_id'] for task in tasks]
+            # Assigning tasks to scaler_id
+            self.tasks.update_many({'_id': {'$in': ids}}, {'$set': {'scaler_id': scaler_id, 'status': 'pending'}}, upsert=False)
+            # Retrieving updated tasks
+            new_tasks = self.tasks.find({'_id': {'$in': ids}})
+            new_tasks = [self.to_obj(task) for task in new_tasks]
+            return new_tasks
+        else:
+            raise ScalerNotFound("Scaler not found in db")
     
     def unassign_tasks(self, scaler_id):
         """
         Unassigns all tasks assigned to the Scaler with given scaler_id
 
         :param ObjectId scaler_id: Id of the scaler
-        :return: the unassinged tasks in a list
+        :return: the unassigned tasks in a list
         :rtype: List<Task>
         :raises TypeError: if scaler_id is not an ObjectId
         :raises ScalerNotFound: if the scaler with given id does not exist
@@ -110,9 +118,14 @@ class TaskQueue(object):
             raise TypeError("Scaler_id parameter should be an ObjectId")
         scaler = self.scalers.find_one({"_id": scaler_id})
         if scaler:
-            tasks = self.tasks.find_many({"scaler_id": scaler_id})
-            tasks = [Task(task_id=task_id, status=status, created_at=task["created_at"], urgency=task["urgency"]) for task in tasks]
-            return tasks
+            # Retrieving tasks (and ids) assigned to scaler_id
+            tasks = self.tasks.find({"scaler_id": scaler_id})
+            ids = [t['_id'] for t in tasks]
+            # Updating tasks retrieved
+            self.tasks.update_many({"scaler_id": scaler_id}, {'$set': {"status": "pending", "scaler_id": None}}, upsert=False)
+            new_tasks = self.tasks.find({'_id': {'$in': ids}})
+            new_tasks = [self.to_obj(task) for task in tasks]
+            return new_tasks
         else:
             raise ScalerNotFound("Scaler not found in db")
 
@@ -129,32 +142,36 @@ class TaskQueue(object):
         """
         if type(task_id) is not ObjectId:
             raise TypeError("Task_id parameter should be an ObjectId")
-        task = self.tasks.find_one_and_update({'_id': task_id}, {'$set': {'status': status}}, upsert=False, return_document=ReturnDocument.AFTER)
+        to_modify = {'status': status, 'scaler_id': None}
+        if status is "completed":
+            to_modify["completed_at"] = datetime.utcnow()
+        task = self.tasks.find_one_and_update({'_id': task_id}, {'$set': to_modify}, upsert=False, return_document=ReturnDocument.AFTER)
         if task:
-            task = Task(task_id=task_id, status=status, created_at=task["created_at"], urgency=task["urgency"])
-            return task
+            return self.to_obj(task) 
         else:
             raise TaskNotFound("Task not found in db")
+
+    def to_obj(self, task):
+        return Task(task_id=task["_id"], status=task["status"], created_at=task["created_at"], urgency=task["urgency"], scaler_id=task["scaler_id"], completed_at=task["completed_at"])
+
+    def to_int(self, urgency):
+        if urgency is "immediate":
+            return 3
+        elif urgency is "day":
+            return 2
+        else: #urgency is "week"
+            return 1
 
 class Task(object):
     """
     Implements a Task with a given id, and urgency
     """
-    def __init__(self, task_id, created_at, status, urgency):
+    def __init__(self, task_id, created_at, status, urgency, scaler_id, completed_at):
         self.task_id = task_id
         self.created_at = created_at
         self.status = status
         self.urgency = urgency
-        self.completed_at = None
-
-    def add_complete(self, completed_at):
         self.completed_at = completed_at
-    
-class Scaler(object):
-    """
-    Implements a Scaler with a given id
-    """
-    def __init__(self, scaler_id):
         self.scaler_id = scaler_id
 
 class TaskNotFound(ValueError):
