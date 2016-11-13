@@ -8,7 +8,7 @@ These instructions will get help get your own copy of the project running on you
 
 ### Prerequisites
 
-What do you need to get your development env running
+To get your development environment running, you need
 
 ```
 Python 2.7, pip, mongodb
@@ -16,16 +16,17 @@ Python 2.7, pip, mongodb
 
 ### Installing
 
-To install the necessary dependencies
+To install the necessary python dependencies
 
 ```
 pip install -r requirements.txt
 ```
 
-You can run ```demo.py``` for a small preview of the app's capabilities, or import the class in REPL, or a freshly-created file:
+To start running tests, or using the class, you should run ```add_scalers.py```. This helps create a few scalers in the db.
+You can then use the TaskQueue class by import
 
 ```
-import TaskQueue
+from task_queue import TaskQueue
 
 tq = TaskQueue(...)
 tq.create_task(..., ...)
