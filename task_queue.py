@@ -124,7 +124,7 @@ class TaskQueue(object):
             # Updating tasks retrieved
             self.tasks.update_many({"scaler_id": scaler_id}, {'$set': {"status": "pending", "scaler_id": None}}, upsert=False)
             new_tasks = self.tasks.find({'_id': {'$in': ids}})
-            new_tasks = [self.to_obj(task) for task in tasks]
+            new_tasks = [self.to_obj(task) for task in new_tasks]
             return new_tasks
         else:
             raise ScalerNotFound("Scaler not found in db")
