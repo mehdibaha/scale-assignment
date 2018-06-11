@@ -1,6 +1,6 @@
-# scale-project
+# Scale assignment
 
-This aims to be a take-home project for the company [Scale](https://www.scaleapi.com/), in order to showcase my technical abilities in a "real-life" development project.
+This is a take-home assignment I did for the company [Scale](https://www.scaleapi.com/) to showcase my technical abilities in a "real-life" development project.
 
 ## Getting Started
 
